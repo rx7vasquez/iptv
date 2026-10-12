@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IPTV">
+<meta name="theme-color" content="#0e1116">
+<meta name="referrer" content="no-referrer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<title>IPTV</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --panel2: #1f2731; --line: #2a323d;
+    --text: #e6edf3; --muted: #8b96a5; --accent: #4f8cff; --danger: #ff6b6b; --star: #f5c542;
+    --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  body { overscroll-behavior-y: none; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .hidden { display: none !important; }
+
+  /* Login */
+  #login { min-height: 100%; display: flex; align-items: center; justify-content: center;
+    padding: calc(24px + var(--safe-top)) 16px calc(24px + var(--safe-bottom)); }
+  .card { width: 100%; max-width: 420px; }
+  .card h1 { font-size: 30px; margin: 0 0 4px; }
+  .card p { color: var(--muted); margin: 0 0 24px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input[type=text], input[type=password], input[type=url], input[type=search] {
+    width: 100%; padding: 13px 14px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; outline: none; font-size: 16px; -webkit-appearance: none; }
+  input:focus { border-color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--accent); border: 0; border-radius: 12px; padding: 13px 18px; color: #fff; font-weight: 600; }
+  .btn:active { opacity: .8; }
+  .btn.block { width: 100%; }
+  .btn.ghost { background: var(--panel2); color: var(--text); font-weight: 500; }
+  .err { color: var(--danger); font-size: 14px; margin-top: 14px; min-height: 1.4em; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 18px; }
+
+  /* App */
+  #app { height: 100%; display: flex; flex-direction: column; }
+  header { padding: calc(10px + var(--safe-top)) 12px 10px; background: var(--panel);
+    border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+  header h2 { flex: 1; margin: 0; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icon-btn { background: transparent; border: 0; padding: 6px 8px; font-size: 20px; color: var(--accent); min-width: 40px; }
+  .searchbar { padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .searchbar input { padding: 9px 12px; border-radius: 10px; }
+  #content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 12px; }
+  nav.tabbar { display: flex; background: var(--panel); border-top: 1px solid var(--line);
+    padding-bottom: var(--safe-bottom); }
+  nav.tabbar button { flex: 1; background: transparent; border: 0; padding: 8px 0 6px; color: var(--muted);
+    font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  nav.tabbar button span { font-size: 22px; line-height: 1; }
+  nav.tabbar button.active { color: var(--accent); }
+
+  .status { color: var(--muted); padding: 32px 16px; text-align: center; }
+  .list { display: flex; flex-direction: column; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--line); min-height: 56px; }
+  .row:active { background: var(--panel2); }
+  .row .logo { width: 44px; height: 32px; object-fit: contain; flex: none; border-radius: 6px; background: #0b0e12; }
+  .row .main { flex: 1; min-width: 0; }
+  .row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .sub { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .chev { color: var(--muted); }
+  .row .num { color: var(--muted); font-size: 13px; width: 30px; text-align: right; flex: none; }
+  .star { color: var(--star); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; padding: 12px; }
+  .tile .poster { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 10px; background: var(--panel2); display: block; }
+  .tile .t { font-size: 13px; margin-top: 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .series-head { display: flex; gap: 14px; padding: 14px; }
+  .series-head img { width: 110px; border-radius: 10px; flex: none; align-self: flex-start; }
+  .series-head h3 { margin: 0 0 6px; }
+  .muted { color: var(--muted); }
+  .plot { font-size: 14px; color: var(--muted); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 14px 12px; }
+  .chip { flex: none; background: var(--panel2); border: 0; border-radius: 999px; padding: 7px 14px; font-size: 14px; }
+  .chip.active { background: var(--accent); color: #fff; }
+
+  .section { padding: 14px; }
+  .section h3 { margin: 6px 0 10px; font-size: 15px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  .kv { background: var(--panel); border-radius: 12px; overflow: hidden; }
+  .kv div { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .kv div:last-child { border-bottom: 0; }
+  .kv span:last-child { color: var(--muted); text-align: right; word-break: break-all; }
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--panel);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .switch input { width: 22px; height: 22px; }
+
+  /* Ficha / reproductor */
+  #sheet { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; z-index: 10; }
+  #sheet .panel { width: 100%; max-height: 92%; overflow-y: auto; background: var(--panel); border-radius: 18px 18px 0 0;
+    padding: 10px 16px calc(18px + var(--safe-bottom)); }
+  .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 12px; }
+  .sheet-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .sheet-head img { width: 64px; height: 48px; object-fit: contain; border-radius: 8px; background: #0b0e12; flex: none; }
+  .sheet-head img.poster { width: 70px; height: 105px; object-fit: cover; }
+  .sheet-head h3 { margin: 0; font-size: 18px; }
+  video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; margin-bottom: 12px; display: block; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .actions .wide { grid-column: 1 / -1; }
+  .epg .item { padding: 10px 0; border-top: 1px solid var(--line); }
+  .epg .time { color: var(--muted); font-size: 13px; }
+  .bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); }
+  .perr { color: var(--danger); font-size: 14px; margin: 6px 0; }
+  .banner { margin: 12px; padding: 12px 14px; background: var(--panel2); border-radius: 12px; font-size: 14px; display: flex; gap: 10px; align-items: flex-start; }
+  .banner button { background: transparent; border: 0; color: var(--muted); font-size: 18px; padding: 0 4px; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<section id="login" class="hidden">
+  <form class="card" id="loginForm" autocomplete="on">
+    <h1>📺 IPTV</h1>
+    <p>Conéctate con tu cuenta Xtream Codes.</p>
+    <label for="fServer">Servidor</label>
+    <input id="fServer" type="url" inputmode="url" placeholder="https://proveedor.com" autocapitalize="off" autocorrect="off" required>
+    <label for="fUser">Usuario</label>
+    <input id="fUser" type="text" autocapitalize="off" autocorrect="off" autocomplete="username" required>
+    <label for="fPass">Contraseña</label>
+    <input id="fPass" type="password" autocomplete="current-password" required>
+    <div style="height:18px"></div>
+    <button class="btn block" type="submit" id="loginBtn">Entrar</button>
+    <div class="err" id="loginErr"></div>
+    <div class="hint">Tus datos se guardan solo en este dispositivo y se envían únicamente a tu proveedor.</div>
+  </form>
+</section>
+
+<section id="app" class="hidden">
+  <header>
+    <button class="icon-btn hidden" id="backBtn" aria-label="Atrás">‹</button>
+    <h2 id="title">TV en vivo</h2>
+    <button class="icon-btn" id="searchBtn" aria-label="Buscar">⌕</button>
+  </header>
+  <div class="searchbar hidden" id="searchBar"><input id="search" type="search" placeholder="Buscar en todo el catálogo…" autocapitalize="off" autocorrect="off"></div>
+  <div id="content"></div>
+  <nav class="tabbar">
+    <button data-tab="live"><span>📡</span>TV</button>
+    <button data-tab="vod"><span>🎬</span>Películas</button>
+    <button data-tab="series"><span>🎞️</span>Series</button>
+    <button data-tab="fav"><span>★</span>Favoritos</button>
+    <button data-tab="account"><span>⚙︎</span>Cuenta</button>
+  </nav>
+</section>
+
+<div id="sheet" class="hidden">
+  <div class="panel" id="sheetPanel"></div>
+</div>
+
+<script>
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+const isStandalone = () => window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+const VLC_APPSTORE = 'https://apps.apple.com/app/vlc-media-player/id650377962';
+
+const state = {
+  creds: store.get('xc', null),   // { server, username, password }
+  account: null,
+  tab: 'live',
+  stack: [],                      // pila de vistas para "Atrás"
+  cache: new Map(),
+  settings: store.get('settings', { directVlc: false }),
+};
+
+// ---------- API Xtream (directa al proveedor) ----------
+
+function apiUrl(creds, params = {}) {
+  const u = new URL(creds.server + '/player_api.php');
+  u.searchParams.set('username', creds.username);
+  u.searchParams.set('password', creds.password);
+  for (const [k, v] of Object.entries(params)) if (v != null && v !== '') u.searchParams.set(k, v);
+  return u.href;
+}
+
+async function fetchJson(url, timeout = 20000) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeout);
+  try {
+    const r = await fetch(url, { signal: ac.signal, cache: 'no-store', referrerPolicy: 'no-referrer' });
+    if (!r.ok) throw new Error(`El servidor respondió ${r.status}`);
+    return await r.json();
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('El servidor tardó demasiado en responder');
+    if (e instanceof TypeError) throw new Error('No se pudo conectar con el servidor');
+    throw e;
+  } finally { clearTimeout(t); }
+}
+
+async function api(action, params = {}) {
+  const key = action + JSON.stringify(params);
+  if (state.cache.has(key)) return state.cache.get(key);
+  const data = await fetchJson(apiUrl(state.creds, { action, ...params }), 45000);
+  if (action !== 'get_short_epg') state.cache.set(key, data);
+  return data;
+}
+
+function streamUrl(kind, id, ext) {
+  const c = state.creds, enc = encodeURIComponent;
+  return `${c.server}/${kind}/${enc(c.username)}/${enc(c.password)}/${id}.${ext}`;
+}
+
+function vlcUrl(url) {
+  return 'vlc-x-callback://x-callback-url/stream?url=' + encodeURIComponent(url);
+}
+
+// ---------- Inicio de sesión ----------
+
+// Candidatos de URL: si la app va por HTTPS, el proveedor también debe ir por HTTPS
+function serverCandidates(input) {
+  let s = String(input || '').trim();
+  if (!s) throw new Error('Falta el servidor');
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  const u = new URL(s);
+  const path = u.pathname.replace(/\/(player_api|get|xmltv)\.php$/i, '').replace(/\/+$/, '');
+  const list = [];
+  if (location.protocol === 'https:') {
+    list.push(`https://${u.hostname}${path}`);                         // 443
+    if (u.port && u.port !== '443') list.push(`https://${u.hostname}:${u.port}${path}`);
+  } else {
+    list.push(u.origin + path);
+    if (u.protocol === 'http:') list.push(`https://${u.hostname}${path}`);
+  }
+  return [...new Set(list)];
+}
+
+async function tryLogin(serverInput, username, password) {
+  let lastErr = null;
+  for (const server of serverCandidates(serverInput)) {
+    const creds = { server, username, password };
+    try {
+      const data = await fetchJson(apiUrl(creds), 15000);
+      if (!data.user_info || Number(data.user_info.auth) !== 1) throw new Error('Usuario o contraseña incorrectos');
+      if (data.user_info.status && data.user_info.status !== 'Active') throw new Error('Cuenta no activa: ' + data.user_info.status);
+      return { creds, data };
+    } catch (e) {
+      lastErr = e;
+      if (/incorrectos|no activa/.test(e.message)) throw e;
+    }
+  }
+  if (location.protocol === 'https:' && /conectar/.test(lastErr?.message || '')) {
+    throw new Error('No se pudo conectar por HTTPS con tu proveedor. Esta app necesita que el proveedor admita HTTPS.');
+  }
+  throw lastErr || new Error('No se pudo iniciar sesión');
+}
+
+$('#loginForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  $('#loginErr').textContent = '';
+  const btn = $('#loginBtn');
+  btn.disabled = true; btn.textContent = 'Conectando…';
+  try {
+    const { creds, data } = await tryLogin($('#fServer').value, $('#fUser').value.trim(), $('#fPass').value);
+    state.creds = creds;
+    store.set('xc', creds);
+    $('#fPass').value = '';
+    enterApp(data);
+  } catch (e) {
+    $('#loginErr').textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+});
+
+function showLogin() {
+  $('#app').classList.add('hidden');
+  $('#login').classList.remove('hidden');
+  const last = store.get('lastServer', '');
+  if (last) $('#fServer').value = last;
+}
+
+function logout() {
+  store.del('xc');
+  state.creds = null; state.account = null; state.cache.clear();
+  closeSheet();
+  showLogin();
+}
+
+async function init() {
+  if (!state.creds) return showLogin();
+  enterApp(null);
+  try {
+    const data = await fetchJson(apiUrl(state.creds), 15000);
+    if (data.user_info && Number(data.user_info.auth) === 1) state.account = data;
+    else { logout(); $('#loginErr').textContent = 'La sesión ya no es válida, vuelve a entrar.'; }
+  } catch { /* sin conexión: seguimos con lo que haya */ }
+}
+
+function enterApp(data) {
+  if (data) state.account = data;
+  store.set('lastServer', state.creds.server);
+  $('#login').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  switchTab(store.get('tab', 'live'));
+}
+
+// ---------- Navegación ----------
+
+const TABS = {
+  live:   { title: 'TV en vivo', cats: 'get_live_categories',   list: 'get_live_streams', kind: 'live' },
+  vod:    { title: 'Películas',  cats: 'get_vod_categories',    list: 'get_vod_streams',  kind: 'movie' },
+  series: { title: 'Series',     cats: 'get_series_categories', list: 'get_series',       kind: 'series' },
+  fav:    { title: 'Favoritos' },
+  account:{ title: 'Cuenta' },
+};
+
+document.querySelectorAll('nav.tabbar button').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+function switchTab(tab) {
+  state.tab = tab;
+  store.set('tab', tab);
+  state.stack = [];
+  document.querySelectorAll('nav.tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  $('#searchBtn').classList.toggle('hidden', !TABS[tab].list && tab !== 'fav');
+  hideSearch();
+  if (tab === 'fav') return pushView({ title: 'Favoritos', render: renderFavorites });
+  if (tab === 'account') return pushView({ title: 'Cuenta', render: renderAccount });
+  pushView({ title: TABS[tab].title, render: renderCategories });
+}
+
+function pushView(view) {
+  if (state.stack.length) state.stack[state.stack.length - 1].scroll = $('#content').scrollTop;
+  state.stack.push(view);
+  showView(view, 0);
+}
+
+function popView() {
+  if (state.stack.length < 2) return;
+  state.stack.pop();
+  const v = state.stack[state.stack.length - 1];
+  showView(v, v.scroll || 0);
+}
+
+function showView(view, scroll) {
+  $('#title').textContent = view.title;
+  $('#backBtn').classList.toggle('hidden', state.stack.length < 2);
+  $('#content').scrollTop = 0;
+  Promise.resolve(view.render(view)).then(() => { $('#content').scrollTop = scroll; });
+}
+
+$('#backBtn').addEventListener('click', popView);
+
+function setContent(html) { $('#content').innerHTML = html; }
+function loading(msg = 'Cargando…') { setContent(`<div class="status">${esc(msg)}</div>`); }
+function failed(e) { setContent(`<div class="status">${esc(e.message || e)}<br><br><button class="btn ghost" onclick="showView(state.stack[state.stack.length-1],0)">Reintentar</button></div>`); }
+
+// ---------- Búsqueda ----------
+
+$('#searchBtn').addEventListener('click', () => {
+  const bar = $('#searchBar');
+  if (bar.classList.contains('hidden')) { bar.classList.remove('hidden'); $('#search').focus(); }
+  else hideSearch(true);
+});
+function hideSearch(rerender) {
+  $('#searchBar').classList.add('hidden');
+  if ($('#search').value) { $('#search').value = ''; if (rerender) showView(state.stack[state.stack.length - 1], 0); }
+}
+let searchTimer;
+$('#search').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 300);
+});
+async function runSearch() {
+  const q = $('#search').value.trim().toLowerCase();
+  if (!q) return showView(state.stack[state.stack.length - 1], 0);
+  if (state.tab === 'fav') return renderFavorites(null, q);
+  const t = TABS[state.tab];
+  loading('Buscando…');
+  try {
+    const all = await api(t.list);
+    renderItems((Array.isArray(all) ? all : []).filter((it) => (it.name || '').toLowerCase().includes(q)).slice(0, 500), t.kind);
+  } catch (e) { failed(e); }
+}
+
+// ---------- Categorías y listas ----------
+
+async function renderCategories() {
+  const t = TABS[state.tab];
+  loading();
+  try {
+    const cats = await api(t.cats);
+    const list = [{ category_id: '', category_name: 'Todas' }, ...(Array.isArray(cats) ? cats : [])];
+    setContent(`${installBanner()}<div class="list">${list.map((c) =>
+      `<div class="row" data-cat="${esc(c.category_id)}"><div class="main"><div class="name">${esc(c.category_name)}</div></div><span class="chev">›</span></div>`).join('')}</div>`);
+    $('#content').querySelectorAll('[data-cat]').forEach((r) => r.addEventListener('click', () => {
+      const name = r.querySelector('.name').textContent;
+      pushView({ title: name, render: () => renderCategory(r.dataset.cat) });
+    }));
+    bindBanner();
+  } catch (e) { failed(e); }
+}
+
+async function renderCategory(catId) {
+  const t = TABS[state.tab];
+  loading();
+  try {
+    const data = await api(t.list, catId ? { category_id: catId } : {});
+    renderItems(Array.isArray(data) ? data : [], t.kind);
+  } catch (e) { failed(e); }
+}
+
+function toEntry(it, kind) {
+  if (kind === 'live') return { kind, id: it.stream_id, name: it.name, icon: it.stream_icon, num: it.num };
+  if (kind === 'movie') return { kind, id: it.stream_id, name: it.name, icon: it.stream_icon, ext: it.container_extension || 'mp4', rating: it.rating };
+  return { kind: 'series', id: it.series_id, name: it.name, icon: it.cover, rating: it.rating };
+}
+
+function renderItems(items, kind) {
+  const entries = items.map((it) => (it.kind ? it : toEntry(it, kind)));
+  state.visible = entries;
+  if (!entries.length) return setContent('<div class="status">Sin resultados</div>');
+  const asList = entries[0].kind === 'live' || entries.some((e) => e.episode);
+  setContent(`<div class="${asList ? 'list' : 'grid'}" id="box"></div><div id="sentinel" style="height:1px"></div>`);
+  const box = $('#box');
+  let i = 0;
+  const CHUNK = asList ? 150 : 60;
+  const add = () => {
+    box.insertAdjacentHTML('beforeend', entries.slice(i, i + CHUNK).map((e, j) => entryHtml(e, i + j, asList)).join(''));
+    i += CHUNK;
+    if (i >= entries.length) io.disconnect();
+  };
+  const io = new IntersectionObserver((o) => { if (o[0].isIntersecting) add(); }, { root: $('#content'), rootMargin: '800px' });
+  add();
+  io.observe($('#sentinel'));
+}
+
+function entryHtml(e, idx, asList) {
+  const fav = isFav(e) ? ' <span class="star">★</span>' : '';
+  if (asList) {
+    const logo = e.icon ? `<img class="logo" loading="lazy" src="${esc(e.icon)}" alt="" onerror="this.style.visibility='hidden'">` : '<span class="logo"></span>';
+    return `<div class="row" data-idx="${idx}">${e.num != null ? `<span class="num">${esc(e.num)}</span>` : ''}${logo}<div class="main"><div class="name">${esc(e.name)}${fav}</div></div></div>`;
+  }
+  const img = e.icon ? `<img class="poster" loading="lazy" src="${esc(e.icon)}" alt="" onerror="this.removeAttribute('src')">` : '<div class="poster"></div>';
+  return `<div class="tile" data-idx="${idx}">${img}<div class="t">${esc(e.name)}${fav}</div></div>`;
+}
+
+$('#content').addEventListener('click', (ev) => {
+  const el = ev.target.closest('[data-idx]');
+  if (!el || !state.visible) return;
+  const e = state.visible[Number(el.dataset.idx)];
+  if (!e) return;
+  if (e.kind === 'series' && !e.episode) return pushView({ title: e.name, render: () => renderSeries(e) });
+  if (state.settings.directVlc && e.kind === 'live') return openInVlc(e);
+  openSheet(e);
+});
+
+// ---------- Series ----------
+
+async function renderSeries(e) {
+  loading();
+  try {
+    const data = await api('get_series_info', { series_id: e.id });
+    const info = data.info || {};
+    const episodes = data.episodes || {};
+    const seasons = Object.keys(episodes).sort((a, b) => Number(a) - Number(b));
+    const meta = [info.releaseDate || info.release_date, info.genre, info.rating && '★ ' + info.rating].filter(Boolean).join(' · ');
+    setContent(`
+      <div class="series-head">${info.cover || e.icon ? `<img src="${esc(info.cover || e.icon)}" alt="">` : ''}
+        <div><h3>${esc(info.name || e.name)}</h3><div class="muted" style="font-size:13px">${esc(meta)}</div>
+        <p class="plot">${esc(info.plot || '')}</p>
+        <button class="btn ghost" id="favSeries" style="padding:8px 12px">${isFav(e) ? '★ En favoritos' : '☆ Favorito'}</button></div></div>
+      <div class="chips">${seasons.map((s) => `<button class="chip" data-season="${esc(s)}">Temporada ${esc(s)}</button>`).join('')}</div>
+      <div class="list" id="eps"></div>`);
+    $('#favSeries').addEventListener('click', (ev) => { ev.target.textContent = toggleFav(e) ? '★ En favoritos' : '☆ Favorito'; });
+    const show = (s) => {
+      document.querySelectorAll('[data-season]').forEach((b) => b.classList.toggle('active', b.dataset.season === s));
+      state.visible = (episodes[s] || []).map((ep) => ({
+        kind: 'series', episode: true, id: ep.id, ext: ep.container_extension || 'mp4',
+        name: ep.title || `Episodio ${ep.episode_num}`, num: ep.episode_num,
+        full: `${info.name || e.name} · T${s}E${ep.episode_num}`, plot: ep.info?.plot, icon: ep.info?.movie_image,
+      }));
+      $('#eps').innerHTML = state.visible.map((ep, i) =>
+        `<div class="row" data-idx="${i}"><span class="num">${esc(ep.num)}</span><div class="main"><div class="name">${esc(ep.name)}</div></div><span class="chev">›</span></div>`).join('')
+        || '<div class="status">Sin episodios</div>';
+    };
+    document.querySelectorAll('[data-season]').forEach((b) => b.addEventListener('click', () => show(b.dataset.season)));
+    if (seasons.length) show(seasons[0]);
+  } catch (err) { failed(err); }
+}
+
+// ---------- Favoritos ----------
+
+const favKey = (e) => `${e.kind}:${e.id}`;
+const getFavs = () => store.get('favorites', {});
+const isFav = (e) => !e.episode && !!getFavs()[favKey(e)];
+function toggleFav(e) {
+  const f = getFavs(), k = favKey(e);
+  if (f[k]) delete f[k]; else f[k] = { kind: e.kind, id: e.id, name: e.name, icon: e.icon, ext: e.ext, num: e.num };
+  store.set('favorites', f);
+  return !!f[k];
+}
+function renderFavorites(_, q = '') {
+  const order = { live: 0, movie: 1, series: 2 };
+  const favs = Object.values(getFavs())
+    .filter((f) => !q || (f.name || '').toLowerCase().includes(q))
+    .sort((a, b) => order[a.kind] - order[b.kind] || a.name.localeCompare(b.name));
+  state.visible = favs;
+  if (!favs.length) return setContent('<div class="status">Aún no tienes favoritos.<br>Toca ☆ en la ficha de un canal, película o serie.</div>');
+  const label = { live: 'TV', movie: 'Película', series: 'Serie' };
+  setContent('<div class="list">' + favs.map((e, i) => {
+    const logo = e.icon ? `<img class="logo" loading="lazy" src="${esc(e.icon)}" alt="" onerror="this.style.visibility='hidden'">` : '<span class="logo"></span>';
+    return `<div class="row" data-idx="${i}">${logo}<div class="main"><div class="name">${esc(e.name)}</div><div class="sub">${label[e.kind]}</div></div><span class="chev">›</span></div>`;
+  }).join('') + '</div>');
+}
+
+// ---------- Cuenta ----------
+
+function renderAccount() {
+  const ui = state.account?.user_info || {};
+  const exp = ui.exp_date ? new Date(Number(ui.exp_date) * 1000).toLocaleDateString() : '—';
+  setContent(`
+    ${installBanner(true)}
+    <div class="section"><h3>Cuenta</h3><div class="kv">
+      <div><span>Usuario</span><span>${esc(state.creds.username)}</span></div>
+      <div><span>Servidor</span><span>${esc(state.creds.server)}</span></div>
+      <div><span>Estado</span><span>${esc(ui.status || '—')}</span></div>
+      <div><span>Vence</span><span>${esc(exp)}</span></div>
+      <div><span>Conexiones</span><span>${esc(ui.active_cons ?? '—')} / ${esc(ui.max_connections ?? '—')}</span></div>
+    </div></div>
+    <div class="section"><h3>Reproducción</h3>
+      <label class="switch"><span>Abrir canales de TV directamente en VLC</span><input type="checkbox" id="directVlc" ${state.settings.directVlc ? 'checked' : ''}></label>
+      <p class="plot">Los streams de tu proveedor se reproducen en <b>VLC</b> (gratis). Si aún no lo tienes:</p>
+      <a class="btn ghost block" href="${VLC_APPSTORE}" target="_blank" rel="noopener">Instalar VLC desde App Store</a>
+    </div>
+    <div class="section"><h3>Datos</h3>
+      <button class="btn ghost block" id="clearCache" style="margin-bottom:10px">Recargar catálogo</button>
+      <button class="btn ghost block" id="logoutBtn" style="color:var(--danger)">Cerrar sesión</button>
+    </div>`);
+  $('#directVlc').addEventListener('change', (ev) => { state.settings.directVlc = ev.target.checked; store.set('settings', state.settings); });
+  $('#clearCache').addEventListener('click', () => { state.cache.clear(); alert('Catálogo recargado.'); });
+  $('#logoutBtn').addEventListener('click', () => { if (confirm('¿Cerrar sesión en este dispositivo?')) logout(); });
+  bindBanner();
+}
+
+function installBanner(force) {
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isStandalone() || !isIOS || (!force && store.get('hideInstall', false))) return '';
+  return `<div class="banner" id="installBanner"><div>📲 <b>Instálala:</b> toca <b>Compartir</b> <span style="font-size:18px">⎋</span> y luego <b>Añadir a pantalla de inicio</b>.</div><button aria-label="Cerrar">✕</button></div>`;
+}
+function bindBanner() {
+  $('#installBanner button')?.addEventListener('click', () => { store.set('hideInstall', true); $('#installBanner').remove(); });
+}
+
+// ---------- Ficha y reproducción ----------
+
+let epgTimer = null, playTimer = null;
+
+function openInVlc(e) {
+  const ext = e.kind === 'live' ? 'ts' : (e.ext || 'mp4');
+  location.href = vlcUrl(streamUrl(e.kind, e.id, ext));
+}
+
+function openSheet(e) {
+  const title = e.full || e.name;
+  const isLive = e.kind === 'live';
+  const img = e.icon ? `<img class="${isLive ? '' : 'poster'}" src="${esc(e.icon)}" alt="" onerror="this.remove()">` : '';
+  $('#sheetPanel').innerHTML = `
+    <div class="grab"></div>
+    <div class="sheet-head">${img}<div><h3>${esc(title)}</h3><div class="muted" style="font-size:13px">${isLive ? 'TV en vivo' : e.kind === 'movie' ? 'Película' : 'Episodio'}</div></div></div>
+    <div id="playerBox"></div>
+    <div class="actions">
+      <button class="btn wide" id="vlcBtn">▶ Ver en VLC</button>
+      <button class="btn ghost" id="inlineBtn">Probar aquí</button>
+      ${e.episode ? '<span></span>' : `<button class="btn ghost" id="favBtn">${isFav(e) ? '★ Favorito' : '☆ Favorito'}</button>`}
+    </div>
+    <div class="perr" id="perr"></div>
+    <div id="info" class="plot">${esc(e.plot || '')}</div>
+    <div class="epg" id="epg"></div>
+    <a class="muted" style="display:block;font-size:13px;margin-top:14px" href="${VLC_APPSTORE}" target="_blank" rel="noopener">¿No tienes VLC? Instálalo gratis</a>`;
+  $('#sheet').classList.remove('hidden');
+  $('#vlcBtn').addEventListener('click', () => openInVlc(e));
+  $('#inlineBtn').addEventListener('click', () => playInline(e));
+  $('#favBtn')?.addEventListener('click', (ev) => { ev.target.textContent = toggleFav(e) ? '★ Favorito' : '☆ Favorito'; });
+  if (isLive) { loadEpg(e); epgTimer = setInterval(() => loadEpg(e), 60000); }
+  else if (e.kind === 'movie') loadMovieInfo(e);
+}
+
+function closeSheet() {
+  clearInterval(epgTimer); clearTimeout(playTimer);
+  const v = $('#playerBox video');
+  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+  $('#sheet').classList.add('hidden');
+  $('#sheetPanel').innerHTML = '';
+}
+$('#sheet').addEventListener('click', (ev) => { if (ev.target.id === 'sheet') closeSheet(); });
+// Deslizar hacia abajo desde el asa para cerrar
+(() => {
+  let y0 = null;
+  $('#sheetPanel').addEventListener('touchstart', (ev) => { y0 = $('#sheetPanel').scrollTop === 0 ? ev.touches[0].clientY : null; }, { passive: true });
+  $('#sheetPanel').addEventListener('touchend', (ev) => { if (y0 != null && ev.changedTouches[0].clientY - y0 > 90) closeSheet(); y0 = null; });
+})();
+
+function playInline(e) {
+  const ext = e.kind === 'live' ? 'm3u8' : (e.ext || 'mp4');
+  const box = $('#playerBox');
+  box.innerHTML = '<video controls playsinline autoplay></video>';
+  const v = $('video', box);
+  const fail = () => {
+    $('#perr').innerHTML = 'No se pudo reproducir aquí: tu proveedor envía el vídeo sin cifrar y Safari lo bloquea, o el formato no es compatible. Usa <b>Ver en VLC</b>.';
+    box.innerHTML = '';
+  };
+  $('#perr').textContent = '';
+  v.addEventListener('error', fail, { once: true });
+  v.addEventListener('playing', () => clearTimeout(playTimer), { once: true });
+  clearTimeout(playTimer);
+  playTimer = setTimeout(() => { if (v.isConnected && (v.readyState < 2 || v.currentTime === 0)) fail(); }, 15000);
+  v.src = streamUrl(e.kind, e.id, ext);
+  v.play().catch(() => {});
+}
+
+function b64(s) { try { return new TextDecoder().decode(Uint8Array.from(atob(s || ''), (c) => c.charCodeAt(0))); } catch { return s || ''; } }
+
+async function loadEpg(e) {
+  try {
+    const data = await api('get_short_epg', { stream_id: e.id, limit: 4 });
+    const box = $('#epg'); if (!box) return;
+    const now = Date.now() / 1000;
+    const items = (data.epg_listings || []).filter((x) => Number(x.stop_timestamp) > now);
+    if (!items.length) { box.innerHTML = '<div class="muted" style="font-size:14px">Sin guía de programación.</div>'; return; }
+    const fmt = (t) => new Date(Number(t) * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    box.innerHTML = items.map((x, i) => {
+      const s = Number(x.start_timestamp), en = Number(x.stop_timestamp);
+      const pct = Math.max(0, Math.min(100, ((now - s) / (en - s)) * 100));
+      return `<div class="item"><div class="time">${i === 0 ? 'Ahora · ' : ''}${fmt(s)} – ${fmt(en)}</div><div><b>${esc(b64(x.title))}</b></div>
+        ${i === 0 ? `<div class="plot">${esc(b64(x.description))}</div><div class="bar"><i style="width:${pct}%"></i></div>` : ''}</div>`;
+    }).join('');
+  } catch {}
+}
+
+async function loadMovieInfo(e) {
+  try {
+    const i = (await api('get_vod_info', { vod_id: e.id })).info || {};
+    const box = $('#info'); if (!box) return;
+    const meta = [i.releasedate || i.release_date, i.genre, i.duration, i.rating && '★ ' + i.rating].filter(Boolean).join(' · ');
+    box.innerHTML = `${meta ? `<div>${esc(meta)}</div>` : ''}${i.plot ? `<p>${esc(i.plot)}</p>` : ''}${i.cast ? `<div>Reparto: ${esc(i.cast)}</div>` : ''}`;
+  } catch {}
+}
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+init();
+</script>
+</body>
+</html>
