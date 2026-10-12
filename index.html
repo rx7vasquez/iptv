@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <title>IPTV</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 <style>
   :root {
     --bg: #0e1116; --panel: #161b22; --panel2: #1f2731; --line: #2a323d;
@@ -177,7 +178,31 @@ const state = {
   stack: [],                      // pila de vistas para "Atrás"
   cache: new Map(),
   settings: store.get('settings', { directVlc: false }),
+  cloud: store.get('cloud', null),   // { u: URL de la función, k: clave } → TV en vivo dentro de la app
+  cloudOk: null,                     // true/false tras comprobarla
 };
+
+// ---------- Relé en la nube para TV en vivo ----------
+
+// Vinculación: el enlace trae #tv=<datos>; se guarda y se quita de la barra
+(() => {
+  const m = location.hash.match(/[#&]tv=([A-Za-z0-9_-]+)/);
+  if (!m) return;
+  try {
+    const d = JSON.parse(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (d.u && d.k) { state.cloud = { u: d.u, k: d.k }; store.set('cloud', state.cloud); state.justPaired = true; }
+  } catch {}
+  history.replaceState(null, '', location.pathname + location.search);
+})();
+
+async function checkCloud() {
+  if (!state.cloud) { state.cloudOk = null; return; }
+  try {
+    const r = await fetchJson(`${state.cloud.u}/${state.cloud.k}/ping`, 10000);
+    state.cloudOk = !!r.ok;
+  } catch { state.cloudOk = false; }
+}
+const cloudLive = (id) => `${state.cloud.u}/${state.cloud.k}/live/${id}.m3u8`;
 
 // ---------- API Xtream (directa al proveedor) ----------
 
@@ -293,6 +318,7 @@ function logout() {
 }
 
 async function init() {
+  checkCloud();
   if (!state.creds) return showLogin();
   enterApp(null);
   try {
@@ -304,6 +330,7 @@ async function init() {
 
 function enterApp(data) {
   if (data) state.account = data;
+  if (state.justPaired) { state.justPaired = false; setTimeout(() => alert('✅ Relé vinculado: los canales en vivo se verán dentro de la app.'), 300); }
   store.set('lastServer', state.creds.server);
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
@@ -456,7 +483,7 @@ $('#content').addEventListener('click', (ev) => {
   const e = state.visible[Number(el.dataset.idx)];
   if (!e) return;
   if (e.kind === 'series' && !e.episode) return pushView({ title: e.name, render: () => renderSeries(e) });
-  if (state.settings.directVlc && e.kind === 'live') return openInVlc(e);
+  if (state.settings.directVlc && e.kind === 'live' && !state.cloud) return openInVlc(e);
   openSheet(e);
 });
 
@@ -533,6 +560,13 @@ function renderAccount() {
       <div><span>Vence</span><span>${esc(exp)}</span></div>
       <div><span>Conexiones</span><span>${esc(ui.active_cons ?? '—')} / ${esc(ui.max_connections ?? '—')}</span></div>
     </div></div>
+    <div class="section"><h3>TV en vivo dentro de la app</h3>
+      ${state.cloud
+        ? `<div class="kv"><div><span>Relé en la nube</span><span id="cloudState">${state.cloudOk === true ? '✅ Conectado' : state.cloudOk === false ? '⚠️ No responde' : 'Comprobando…'}</span></div></div>
+           <label class="switch" style="margin-top:10px"><span>Empezar a reproducir al abrir un canal</span><input type="checkbox" id="autoPlay" ${state.settings.autoPlay !== false ? 'checked' : ''}></label>
+           <button class="btn ghost block" id="unpairBtn">Desvincular relé</button>`
+        : '<p class="plot">Sin relé vinculado: los canales se abren en VLC. Para verlos dentro de la app (por ejemplo en el navegador de APTV), abre aquí tu enlace de vinculación.</p>'}
+    </div>
     <div class="section"><h3>Reproducción</h3>
       <label class="switch"><span>Abrir canales de TV directamente en VLC</span><input type="checkbox" id="directVlc" ${state.settings.directVlc ? 'checked' : ''}></label>
       <p class="plot">Los streams de tu proveedor se reproducen en <b>VLC</b> (gratis). Si aún no lo tienes:</p>
@@ -543,6 +577,12 @@ function renderAccount() {
       <button class="btn ghost block" id="logoutBtn" style="color:var(--danger)">Cerrar sesión</button>
     </div>`);
   $('#directVlc').addEventListener('change', (ev) => { state.settings.directVlc = ev.target.checked; store.set('settings', state.settings); });
+  $('#autoPlay')?.addEventListener('change', (ev) => { state.settings.autoPlay = ev.target.checked; store.set('settings', state.settings); });
+  $('#unpairBtn')?.addEventListener('click', () => {
+    if (!confirm('¿Desvincular el relé? Los canales volverán a abrirse en VLC.')) return;
+    state.cloud = null; state.cloudOk = null; store.del('cloud'); renderAccount();
+  });
+  if (state.cloud && state.cloudOk === null) checkCloud().then(() => { const el = $('#cloudState'); if (el) el.textContent = state.cloudOk ? '✅ Conectado' : '⚠️ No responde'; });
   $('#clearCache').addEventListener('click', () => { state.cache.clear(); alert('Catálogo recargado.'); });
   $('#logoutBtn').addEventListener('click', () => { if (confirm('¿Cerrar sesión en este dispositivo?')) logout(); });
   bindBanner();
@@ -559,7 +599,7 @@ function bindBanner() {
 
 // ---------- Ficha y reproducción ----------
 
-let epgTimer = null, playTimer = null;
+let epgTimer = null, playTimer = null, hlsPlayer = null;
 
 function openInVlc(e) {
   const ext = e.kind === 'live' ? 'ts' : (e.ext || 'mp4');
@@ -575,8 +615,9 @@ function openSheet(e) {
     <div class="sheet-head">${img}<div><h3>${esc(title)}</h3><div class="muted" style="font-size:13px">${isLive ? 'TV en vivo' : e.kind === 'movie' ? 'Película' : 'Episodio'}</div></div></div>
     <div id="playerBox"></div>
     <div class="actions">
-      <button class="btn wide" id="vlcBtn">▶ Ver en VLC</button>
-      <button class="btn ghost" id="inlineBtn">Probar aquí</button>
+      ${isLive && state.cloud
+        ? '<button class="btn wide" id="inlineBtn">▶ Ver aquí</button><button class="btn ghost" id="vlcBtn">Ver en VLC</button>'
+        : '<button class="btn wide" id="vlcBtn">▶ Ver en VLC</button><button class="btn ghost" id="inlineBtn">Probar aquí</button>'}
       ${e.episode ? '<span></span>' : `<button class="btn ghost" id="favBtn">${isFav(e) ? '★ Favorito' : '☆ Favorito'}</button>`}
     </div>
     <div class="perr" id="perr"></div>
@@ -589,10 +630,12 @@ function openSheet(e) {
   $('#favBtn')?.addEventListener('click', (ev) => { ev.target.textContent = toggleFav(e) ? '★ Favorito' : '☆ Favorito'; });
   if (isLive) { loadEpg(e); epgTimer = setInterval(() => loadEpg(e), 60000); }
   else if (e.kind === 'movie') loadMovieInfo(e);
+  if (isLive && state.cloud && state.settings.autoPlay !== false) playInline(e);
 }
 
 function closeSheet() {
   clearInterval(epgTimer); clearTimeout(playTimer);
+  if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
   const v = $('#playerBox video');
   if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
   $('#sheet').classList.add('hidden');
@@ -607,20 +650,37 @@ $('#sheet').addEventListener('click', (ev) => { if (ev.target.id === 'sheet') cl
 })();
 
 function playInline(e) {
+  const viaCloud = e.kind === 'live' && !!state.cloud;
   const ext = e.kind === 'live' ? 'm3u8' : (e.ext || 'mp4');
+  const url = viaCloud ? cloudLive(e.id) : streamUrl(e.kind, e.id, ext);
+  if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
   const box = $('#playerBox');
-  box.innerHTML = '<video controls playsinline autoplay></video>';
+  box.innerHTML = '<video controls playsinline autoplay></video><div class="muted" id="pstat" style="font-size:13px;margin:-6px 0 8px">Conectando…</div>';
   const v = $('video', box);
-  const fail = () => {
-    $('#perr').innerHTML = 'No se pudo reproducir aquí: tu proveedor envía el vídeo sin cifrar y Safari lo bloquea, o el formato no es compatible. Usa <b>Ver en VLC</b>.';
+  let failed = false;
+  const fail = (why) => {
+    if (failed || !v.isConnected) return;
+    failed = true;
+    if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
+    $('#perr').innerHTML = viaCloud
+      ? `No se pudo reproducir este canal aquí${why ? ` (${esc(why)})` : ''}. Algunos canales usan formatos que el iPhone no admite (p. ej. audio MP2). Prueba <b>Ver en VLC</b>.`
+      : 'No se pudo reproducir aquí: tu proveedor envía el vídeo sin cifrar y Safari lo bloquea, o el formato no es compatible. Usa <b>Ver en VLC</b>.';
     box.innerHTML = '';
   };
   $('#perr').textContent = '';
-  v.addEventListener('error', fail, { once: true });
-  v.addEventListener('playing', () => clearTimeout(playTimer), { once: true });
+  v.addEventListener('error', () => fail(), { once: true });
+  v.addEventListener('playing', () => { clearTimeout(playTimer); $('#pstat')?.remove(); }, { once: true });
   clearTimeout(playTimer);
-  playTimer = setTimeout(() => { if (v.isConnected && (v.readyState < 2 || v.currentTime === 0)) fail(); }, 15000);
-  v.src = streamUrl(e.kind, e.id, ext);
+  playTimer = setTimeout(() => { if (v.isConnected && (v.readyState < 2 || v.currentTime === 0)) fail('tiempo de espera agotado'); }, 25000);
+  // iPhone/Safari reproducen HLS de forma nativa; en otros navegadores, hls.js
+  if (/\.m3u8$/.test(url) && !v.canPlayType('application/vnd.apple.mpegurl') && window.Hls && Hls.isSupported()) {
+    hlsPlayer = new Hls({ maxBufferLength: 30 });
+    hlsPlayer.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) fail(d.details); });
+    hlsPlayer.loadSource(url);
+    hlsPlayer.attachMedia(v);
+  } else {
+    v.src = url;
+  }
   v.play().catch(() => {});
 }
 
