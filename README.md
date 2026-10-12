@@ -23,6 +23,6 @@ Navega por la cuenta directamente contra el proveedor y reproduce en **VLC para 
   cualquier app Xtream) se pasa a VLC en el propio dispositivo.
 
 ## Limitaciones
-- El servidor del proveedor debe admitir HTTPS (el tuyo sí: `https://crewplus26.com`).
+- El servidor del proveedor debe admitir HTTPS.
 - "Probar aquí" intenta reproducir dentro de la app, pero si el proveedor sirve el vídeo sin
   cifrar Safari lo bloqueará: para eso está VLC.
