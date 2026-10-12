@@ -1,5 +1,5 @@
 // Guarda solo la interfaz para que abra al instante; los datos del proveedor nunca se cachean.
-const CACHE = 'iptv-shell-v2';
+const CACHE = 'iptv-shell-v3';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

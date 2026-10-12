@@ -184,13 +184,25 @@ const state = {
 
 // ---------- Relé en la nube para TV en vivo ----------
 
-// Vinculación: el enlace trae #tv=<datos>; se guarda y se quita de la barra
+const CLOUD_URL = 'https://mdvrhzazdyhbkgopjflm.supabase.co/functions/v1/iptv-live';
+// Código tipo 7KQ2-MX9P-4TWD (se acepta en minúsculas y con o sin guiones)
+const normCode = (c) => {
+  const x = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return x.length === 12 ? `${x.slice(0, 4)}-${x.slice(4, 8)}-${x.slice(8)}` : x;
+};
+
+// Vinculación por enlace: #k=CÓDIGO (corto) o #tv=<datos> (formato anterior)
 (() => {
-  const m = location.hash.match(/[#&]tv=([A-Za-z0-9_-]+)/);
-  if (!m) return;
+  const k = location.hash.match(/[#&]k=([A-Za-z0-9-]+)/);
+  const tv = location.hash.match(/[#&]tv=([A-Za-z0-9_-]+)/);
+  if (!k && !tv) return;
   try {
-    const d = JSON.parse(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')));
-    if (d.u && d.k) { state.cloud = { u: d.u, k: d.k }; store.set('cloud', state.cloud); state.justPaired = true; }
+    if (k) state.cloud = { u: CLOUD_URL, k: normCode(k[1]) };
+    else {
+      const d = JSON.parse(atob(tv[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (d.u && d.k) state.cloud = { u: d.u, k: d.k };
+    }
+    if (state.cloud) { store.set('cloud', state.cloud); state.justPaired = true; }
   } catch {}
   history.replaceState(null, '', location.pathname + location.search);
 })();
@@ -374,7 +386,12 @@ function popView() {
   showView(v, v.scroll || 0);
 }
 
+// Cada vista nueva invalida las cargas pendientes de la anterior
+let renderId = 0;
+const stale = (rid) => rid !== renderId;
+
 function showView(view, scroll) {
+  renderId++;
   $('#title').textContent = view.title;
   $('#backBtn').classList.toggle('hidden', state.stack.length < 2);
   $('#content').scrollTop = 0;
@@ -408,20 +425,24 @@ async function runSearch() {
   if (!q) return showView(state.stack[state.stack.length - 1], 0);
   if (state.tab === 'fav') return renderFavorites(null, q);
   const t = TABS[state.tab];
+  const rid = ++renderId;
   loading('Buscando…');
   try {
     const all = await api(t.list);
+    if (stale(rid)) return;
     renderItems((Array.isArray(all) ? all : []).filter((it) => (it.name || '').toLowerCase().includes(q)).slice(0, 500), t.kind);
-  } catch (e) { failed(e); }
+  } catch (e) { if (!stale(rid)) failed(e); }
 }
 
 // ---------- Categorías y listas ----------
 
 async function renderCategories() {
   const t = TABS[state.tab];
+  const rid = renderId;
   loading();
   try {
     const cats = await api(t.cats);
+    if (stale(rid)) return;
     const list = [{ category_id: '', category_name: 'Todas' }, ...(Array.isArray(cats) ? cats : [])];
     setContent(`${installBanner()}<div class="list">${list.map((c) =>
       `<div class="row" data-cat="${esc(c.category_id)}"><div class="main"><div class="name">${esc(c.category_name)}</div></div><span class="chev">›</span></div>`).join('')}</div>`);
@@ -430,16 +451,18 @@ async function renderCategories() {
       pushView({ title: name, render: () => renderCategory(r.dataset.cat) });
     }));
     bindBanner();
-  } catch (e) { failed(e); }
+  } catch (e) { if (!stale(rid)) failed(e); }
 }
 
 async function renderCategory(catId) {
   const t = TABS[state.tab];
+  const rid = renderId;
   loading();
   try {
     const data = await api(t.list, catId ? { category_id: catId } : {});
+    if (stale(rid)) return;
     renderItems(Array.isArray(data) ? data : [], t.kind);
-  } catch (e) { failed(e); }
+  } catch (e) { if (!stale(rid)) failed(e); }
 }
 
 function toEntry(it, kind) {
@@ -490,9 +513,11 @@ $('#content').addEventListener('click', (ev) => {
 // ---------- Series ----------
 
 async function renderSeries(e) {
+  const rid = renderId;
   loading();
   try {
     const data = await api('get_series_info', { series_id: e.id });
+    if (stale(rid)) return;
     const info = data.info || {};
     const episodes = data.episodes || {};
     const seasons = Object.keys(episodes).sort((a, b) => Number(a) - Number(b));
@@ -518,7 +543,7 @@ async function renderSeries(e) {
     };
     document.querySelectorAll('[data-season]').forEach((b) => b.addEventListener('click', () => show(b.dataset.season)));
     if (seasons.length) show(seasons[0]);
-  } catch (err) { failed(err); }
+  } catch (err) { if (!stale(rid)) failed(err); }
 }
 
 // ---------- Favoritos ----------
@@ -565,7 +590,10 @@ function renderAccount() {
         ? `<div class="kv"><div><span>Relé en la nube</span><span id="cloudState">${state.cloudOk === true ? '✅ Conectado' : state.cloudOk === false ? '⚠️ No responde' : 'Comprobando…'}</span></div></div>
            <label class="switch" style="margin-top:10px"><span>Empezar a reproducir al abrir un canal</span><input type="checkbox" id="autoPlay" ${state.settings.autoPlay !== false ? 'checked' : ''}></label>
            <button class="btn ghost block" id="unpairBtn">Desvincular relé</button>`
-        : '<p class="plot">Sin relé vinculado: los canales se abren en VLC. Para verlos dentro de la app (por ejemplo en el navegador de APTV), abre aquí tu enlace de vinculación.</p>'}
+        : `<p class="plot">Escribe tu código para ver los canales dentro de la app (por ejemplo en el navegador de APTV). Sin código, se abren en VLC.</p>
+           <input type="text" id="codeInput" placeholder="XXXX-XXXX-XXXX" autocapitalize="characters" autocorrect="off" spellcheck="false" style="text-align:center;letter-spacing:.12em;font-size:20px;margin-bottom:10px">
+           <button class="btn block" id="pairBtn">Vincular</button>
+           <div class="err" id="pairErr"></div>`}
     </div>
     <div class="section"><h3>Reproducción</h3>
       <label class="switch"><span>Abrir canales de TV directamente en VLC</span><input type="checkbox" id="directVlc" ${state.settings.directVlc ? 'checked' : ''}></label>
@@ -578,6 +606,21 @@ function renderAccount() {
     </div>`);
   $('#directVlc').addEventListener('change', (ev) => { state.settings.directVlc = ev.target.checked; store.set('settings', state.settings); });
   $('#autoPlay')?.addEventListener('change', (ev) => { state.settings.autoPlay = ev.target.checked; store.set('settings', state.settings); });
+  $('#pairBtn')?.addEventListener('click', async () => {
+    const code = normCode($('#codeInput').value);
+    const btn = $('#pairBtn');
+    btn.disabled = true; btn.textContent = 'Comprobando…'; $('#pairErr').textContent = '';
+    try {
+      const r = await fetchJson(`${CLOUD_URL}/${code}/ping`, 10000);
+      if (!r.ok) throw new Error();
+      state.cloud = { u: CLOUD_URL, k: code }; state.cloudOk = true;
+      store.set('cloud', state.cloud);
+      renderAccount();
+    } catch {
+      $('#pairErr').textContent = 'Código no válido o sin conexión.';
+      btn.disabled = false; btn.textContent = 'Vincular';
+    }
+  });
   $('#unpairBtn')?.addEventListener('click', () => {
     if (!confirm('¿Desvincular el relé? Los canales volverán a abrirse en VLC.')) return;
     state.cloud = null; state.cloudOk = null; store.del('cloud'); renderAccount();
